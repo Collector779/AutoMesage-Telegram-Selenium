@@ -1,10 +1,26 @@
+import sys
+
 from telegram_browser import start_browser, wait_for_login
 from config import TELEGRAM_WEB_URL
 from telegram_scan import scan_all_chats, filter_group_chats
 from telegram_scheduler import run_scheduler
 
 
+
+def configure_console_output():
+    """Ensure console prints do not fail on characters unsupported by the terminal."""
+    for stream_name in ("stdout", "stderr"):
+        stream = getattr(sys, stream_name, None)
+        reconfigure = getattr(stream, "reconfigure", None)
+        if callable(reconfigure):
+            try:
+                reconfigure(errors="replace")
+            except Exception:
+                continue
+
+
 def main():
+    configure_console_output()
     print("Inicjalizacja sterownika przegladarki Chrome...")
     driver = start_browser()
     driver.get(TELEGRAM_WEB_URL)

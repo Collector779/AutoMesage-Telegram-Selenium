@@ -1,4 +1,5 @@
-﻿import time
+﻿import sys
+import time
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
@@ -7,6 +8,18 @@ from selenium.common.exceptions import (
     ElementClickInterceptedException,
     StaleElementReferenceException,
 )
+
+
+def _safe_console_text(value):
+    """Return text safe to print in Windows console by replacing unsupported chars."""
+    if not isinstance(value, str):
+        return value
+    encoding = sys.stdout.encoding or "utf-8"
+    try:
+        return value.encode(encoding, errors="replace").decode(encoding, errors="replace")
+    except Exception:
+        return value.encode("utf-8", errors="replace").decode("utf-8", errors="replace")
+
 
 # === Helpers for forum groups (tematy/podczaty) ===
 def _find_message_input(driver, timeout=2):
@@ -138,9 +151,10 @@ def filter_group_chats(chats, driver):
                 By.XPATH,
                 ".//div[contains(@class, 'row-title') and contains(@class, 'user-title')]//span[contains(@class, 'peer-title')] ",
             )
-            chat_name = chat_name_element.text
-            if not chat_name:
+            chat_name_raw = (chat_name_element.text or "").strip()
+            if not chat_name_raw:
                 continue
+            chat_name = _safe_console_text(chat_name_raw)
 
             print(f"Sprawdzam czat ({i + 1}/{len(chats)}): {chat_name}")
             is_group = False
@@ -257,19 +271,21 @@ def filter_group_chats(chats, driver):
                         topic_peer_id = topic_el.get_attribute("data-peer-id")
                         try:
                             topic_name_el = topic_el.find_element(By.XPATH, ".//span[contains(@class,'peer-title-inner')]")
-                            topic_name = topic_name_el.text
+                            topic_name_value = topic_name_el.text
                         except Exception:
-                            topic_name = topic_el.text if topic_el.text else None
-                        topic_name = (topic_name or "").strip()
+                            topic_name_value = topic_el.text if topic_el.text else None
+                        topic_name_raw = (topic_name_value or "").strip()
+                        topic_name_display = _safe_console_text(topic_name_raw)
                         topic_infos.append(
                             {
                                 "thread_id": thread_id,
                                 "peer_id": topic_peer_id,
-                                "name": topic_name,
+                                "raw_name": topic_name_raw,
+                                "display_name": topic_name_display,
                             }
                         )
                         if idx < 10:
-                            print(f"    -> DEBUG topic[{idx}]: id={thread_id} name='{topic_name[:80]}'")
+                            print(f"    -> DEBUG topic[{idx}]: id={thread_id} name='{topic_name_display[:80]}'")
                     except Exception as info_err:
                         print(f"    -> DEBUG: Nie udalo sie pobrac danych tematu: {info_err}")
 
@@ -331,17 +347,20 @@ def filter_group_chats(chats, driver):
                             snippet = snippet.replace("\n", " ")[:120]
                         except Exception:
                             snippet = ""
-                        display_name = info.get("name") or info["thread_id"]
+                        snippet_display = _safe_console_text(snippet)
+                        display_name_raw = info.get("raw_name") or info["thread_id"]
+                        display_name = info.get("display_name") or _safe_console_text(display_name_raw)
                         writable_chats.append(
                             {
                                 "name": f"{chat_name} / {display_name}",
+                                "raw_name": f"{chat_name_raw} / {display_name_raw}",
                                 "id": i,
                                 "peer_id": peer_id,
                                 "thread_id": info["thread_id"],
                             }
                         )
                         print(
-                            f"  -> OK: Mozna pisac w podczacie '{display_name}' w grupie '{chat_name}'. [input: {snippet}]"
+                            f"  -> OK: Mozna pisac w podczacie '{display_name}' w grupie '{chat_name}'. [input: {snippet_display}]"
                         )
                         forum_writable = True
                     else:
@@ -375,7 +394,8 @@ def filter_group_chats(chats, driver):
                         cand_peer = cand.get_attribute("data-peer-id")
                         cand_tid = cand.get_attribute("data-thread-id")
                         cand_text = cand.text.strip() if cand.text else ""
-                        print(f"    -> DEBUG candidate[{idx}]: peer={cand_peer} thread={cand_tid} text='{cand_text[:80]}'")
+                        cand_text_display = _safe_console_text(cand_text[:80])
+                        print(f"    -> DEBUG candidate[{idx}]: peer={cand_peer} thread={cand_tid} text='{cand_text_display}'")
                     except Exception:
                         continue
 
@@ -386,8 +406,16 @@ def filter_group_chats(chats, driver):
                     snippet = snippet.replace("\n", " ")[:120]
                 except Exception:
                     snippet = ""
-                writable_chats.append({"name": chat_name, "id": i, "peer_id": peer_id})
-                print(f"  -> OK: Mozna pisac w '{chat_name}' [input: {snippet}]")
+                snippet_display = _safe_console_text(snippet)
+                writable_chats.append(
+                    {
+                        "name": chat_name,
+                        "raw_name": chat_name_raw,
+                        "id": i,
+                        "peer_id": peer_id,
+                    }
+                )
+                print(f"  -> OK: Mozna pisac w '{chat_name}' [input: {snippet_display}]")
             else:
                 print(f"  -> Info: Nie mozna pisac w '{chat_name}' (brak aktywnego pola tekstowego).")
 

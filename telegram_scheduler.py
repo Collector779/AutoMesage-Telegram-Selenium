@@ -9,7 +9,7 @@ from selenium.common.exceptions import (
     StaleElementReferenceException,
 )
 
-from telegram_scan import _find_message_input, _find_topics, _go_back_from_topic
+from telegram_scan import _find_message_input, _find_topics, _go_back_from_topic, _safe_console_text
 from config import MESSAGE_TO_SEND
 
 
@@ -111,11 +111,16 @@ def _click_element_with_refresh(driver, element, description, refresh_callback=N
 
 def _open_chat_target(driver, chat_info):
     """Open the requested chat or forum topic and return an active input element."""
-    chat_name = chat_info.get('name') or ''
+    chat_name_display = chat_info.get('name') or ''
+    chat_name_raw = chat_info.get('raw_name') or chat_name_display
     peer_id = chat_info.get('peer_id')
     thread_id = chat_info.get('thread_id')
 
-    group_name, topic_name = _split_chat_display(chat_name)
+    group_name_display, topic_name_display = _split_chat_display(chat_name_display)
+    group_name_raw, topic_name_raw = _split_chat_display(chat_name_raw)
+
+    group_label = group_name_display or _safe_console_text(group_name_raw)
+    topic_label = topic_name_display or (_safe_console_text(topic_name_raw) if topic_name_raw else None)
 
     group_locators = []
     if peer_id is not None:
@@ -128,22 +133,22 @@ def _open_chat_target(driver, chat_info):
         ])
 
     if not group_locators:
-        safe_fragment = group_name.replace("'", "\"")
+        name_for_xpath = (group_name_raw or group_label).replace("'", "\"")
         group_locators.append(
-            (By.XPATH, f"//div[@id='column-left']//a[contains(@class,'chatlist-chat') and contains(., '{safe_fragment[:40]}')]")
+            (By.XPATH, f"//div[@id='column-left']//a[contains(@class,'chatlist-chat') and contains(., '{name_for_xpath[:40]}')]")
         )
 
     group_element = None
     for locator in group_locators:
         try:
-            group_element = _click_locator_with_retries(driver, locator, f"czatu '{group_name}'")
+            group_element = _click_locator_with_retries(driver, locator, f"czatu '{group_label}'")
             if group_element:
                 break
         except Exception:
             continue
 
     if not group_element:
-        raise Exception(f"Nie znaleziono czatu grupy '{group_name}'.")
+        raise Exception(f"Nie znaleziono czatu grupy '{group_label}'.")
 
     try:
         WebDriverWait(driver, 5).until(
@@ -161,8 +166,9 @@ def _open_chat_target(driver, chat_info):
                 tid = topic.get_attribute('data-thread-id') or topic.get_attribute('data-topic-id')
                 if tid == thread_id_str:
                     return topic
-            if topic_name:
-                topic_lower = topic_name.lower()
+            topic_search = topic_name_raw or topic_label
+            if topic_search:
+                topic_lower = topic_search.lower()
                 for topic in topics:
                     text = (topic.text or '').strip().lower()
                     if topic_lower and topic_lower in text:
@@ -183,13 +189,13 @@ def _open_chat_target(driver, chat_info):
                 for t in topics
             ]
             raise Exception(
-                f"Nie znaleziono tematu '{topic_name or thread_id_str}' w grupie '{group_name}'. Dostepne: {debug_list}"
+                f"Nie znaleziono tematu '{topic_label or thread_id_str}' w grupie '{group_label}'. Dostepne: {debug_list}"
             )
 
         _click_element_with_refresh(
             driver,
             topic_element,
-            f"tematu '{topic_name or thread_id_str}'",
+            f"tematu '{topic_label or thread_id_str}'",
             refresh_callback=locate_topic,
         )
 
@@ -204,7 +210,7 @@ def _open_chat_target(driver, chat_info):
     if not input_el:
         raise Exception("Brak aktywnego pola wiadomosci po otwarciu czatu.")
 
-    return input_el, group_name, topic_name
+    return input_el, group_label, topic_label
 
 
 def run_scheduler(driver, writable_chats):
@@ -224,7 +230,8 @@ def run_scheduler(driver, writable_chats):
             wait_time = 0
         minutes = int(wait_time // 60)
         seconds = int(wait_time % 60)
-        print(f"- {chat_name}: pierwsza wiadomosc za okolo {minutes} min. i {seconds} sek.")
+        chat_display = _safe_console_text(chat_name)
+        print(f"- {chat_display}: pierwsza wiadomosc za okolo {minutes} min. i {seconds} sek.")
 
     print("\nAby zatrzymac, nacisnij Ctrl+C w tym oknie.")
 
@@ -232,7 +239,10 @@ def run_scheduler(driver, writable_chats):
         current_time = time.time()
         for key_name, data in schedule.items():
             chat_info = data.get('info', {})
-            chat_name = chat_info.get('name', key_name)
+            chat_name_display = chat_info.get('name', key_name)
+            chat_name = _safe_console_text(chat_name_display)
+            chat_raw_display = chat_info.get('raw_name', chat_name_display)
+            group_raw, topic_raw = _split_chat_display(chat_raw_display)
 
             if current_time >= data['next_send_time']:
                 print(f"\nNadszedl czas na wyslanie wiadomosci do: {chat_name}")
@@ -252,8 +262,16 @@ def run_scheduler(driver, writable_chats):
 
                     header_elements = driver.find_elements(By.XPATH, "//div[@id='column-center']//span[contains(@class, 'peer-title')]")
                     header_text = " | ".join([el.text for el in header_elements if el.text])
-                    if topic_name and topic_name not in header_text and group_name not in header_text:
-                        print(f"  -> DEBUG: Naglowek '{header_text}' nie zawiera oczekiwanego tematu '{topic_name}'.")
+                    header_lower = header_text.lower()
+                    group_raw_lower = group_raw.lower() if group_raw else ""
+                    topic_raw_lower = topic_raw.lower() if topic_raw else ""
+                    if topic_raw:
+                        if topic_raw_lower not in header_lower and (group_raw_lower and group_raw_lower not in header_lower):
+                            header_text_display = _safe_console_text(header_text)
+                            print(f"  -> DEBUG: Naglowek '{header_text_display}' nie zawiera oczekiwanego tematu '{topic_name}'.")
+                    elif group_raw_lower and group_raw_lower not in header_lower:
+                        header_text_display = _safe_console_text(header_text)
+                        print(f"  -> DEBUG: Naglowek '{header_text_display}' nie zawiera nazwy czatu '{group_name}'.")
 
                     try:
                         driver.execute_script("arguments[0].focus();", message_input)
@@ -288,7 +306,8 @@ def run_scheduler(driver, writable_chats):
                     print(f"  -> Nastepna wysylka do '{chat_name}' za {wait_hours} godz. i {wait_minutes_rem} min.")
 
                 except Exception as e:
-                    print(f"  -> Blad podczas wysylania do '{chat_name}': {e}")
+                    error_message = _safe_console_text(str(e))
+                    print(f"  -> Blad podczas wysylania do '{chat_name}': {error_message}")
                     data['next_send_time'] = current_time + 1800
                     print("  -> Sprobuje ponownie za 30 minut.")
                     continue
