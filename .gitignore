@@ -17,3 +17,8 @@ Thumbs.db
 settings.json
 chrome-profile/
 *.log
+
+# Build output (upload the .exe / .deb to GitHub Releases instead of committing them)
+dist/
+build/
+*.spec

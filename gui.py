@@ -11,7 +11,7 @@ import threading
 
 import ttkbootstrap as tb
 
-from config import DEFAULT_SETTINGS, app_data_dir, load_settings, save_settings
+from config import APP_VERSION, ASSETS_DIR, DEFAULT_SETTINGS, app_data_dir, load_settings, save_settings
 from proxy_relay import test_proxy
 from telegram_browser import proxy_url
 from worker import BrowserWorker
@@ -947,7 +947,7 @@ class App:
     def about(self):
         self.info(
             "O programie",
-            "Telegram AutoMessage\n\nWysyła wiadomość lub przekazuje wybraną wiadomość do grup, kanałów "
+            f"Telegram AutoMessage {APP_VERSION}\n\nWysyła wiadomość lub przekazuje wybraną wiadomość do grup, kanałów "
             "i tematów forum przez Telegram Web, w tle.\n\nDane i sesja:\n" + str(app_data_dir()))
 
     def on_close(self):
@@ -1078,7 +1078,8 @@ class App:
 def run():
     settings = load_settings()
     root = tb.Window(title="Telegram AutoMessage", themename=settings.get("theme", DEFAULT_THEME),
-                     size=(1040, 760), minsize=(800, 600))
+                     size=(1040, 760), minsize=(800, 600), iconphoto=str(ASSETS_DIR / "icon-256.png"))
+    # note: an extra iconbitmap(default=.ico) here resets the title bar to a generic icon on Windows
     App(root)
     root.place_window_center()
     root.mainloop()

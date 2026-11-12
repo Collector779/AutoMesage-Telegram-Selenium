@@ -26,7 +26,33 @@ Działa na **Windows** i **Linux** (Debian, Ubuntu, Mint).
 |---|---|
 | ![Logowanie](docs/screenshot-login.png) | ![Przekazywanie](docs/screenshot-forward.png) |
 
-## Instalacja i uruchomienie
+## Pobierz
+
+Gotowe pliki są w zakładce **[Releases](https://github.com/Collector779/AutoMesage-Telegram-Selenium/releases/latest)**:
+
+| System | Plik | Jak zainstalować |
+|---|---|---|
+| **Windows 10/11** | `TelegramAutoMessage-<wersja>-windows.exe` | Pobierz i uruchom. Nic nie trzeba instalować. |
+| **Debian 13+, Ubuntu 24.04+, Mint 22+** | `telegram-automessage_<wersja>_all.deb` | `sudo apt install ./telegram-automessage_<wersja>_all.deb` |
+
+**Windows:**
+- Jeśli na komputerze nie ma Chrome, program przy pierwszym starcie sam pobierze przeglądarkę (Chrome for Testing). Może to potrwać chwilę.
+- Plik nie jest podpisany certyfikatem, więc Windows może pokazać „System Windows ochronił ten komputer”. Kliknij **Więcej informacji → Uruchom mimo to**.
+- Niektóre antywirusy ostrzegają przed programami spakowanymi PyInstallerem. To znany fałszywy alarm. Kod źródłowy jest w tym repozytorium.
+
+**Linux:**
+- `apt` sam doinstaluje Pythona, Tkinter, Pillow, Chromium i czcionki z emoji.
+- Program uruchomisz z menu aplikacji (**Telegram AutoMessage**) albo poleceniem `telegram-automessage`.
+- Odinstalowanie: `sudo apt remove telegram-automessage`. Ustawienia i sesja w `~/.local/share/TelegramAutoMessage` zostają.
+- Na starszych systemach (Debian 12, Ubuntu 22.04) użyj instalacji z kodu źródłowego poniżej.
+
+### Aktualizacje
+
+Program **nie aktualizuje się sam**. Nowe wersje pojawiają się w [Releases](https://github.com/Collector779/AutoMesage-Telegram-Selenium/releases).
+Wystarczy pobrać nowy plik. Na Windowsie zastąp stary `.exe`, a na Linuxie zainstaluj nowy `.deb` tym samym poleceniem.
+Ustawienia i zalogowana sesja zostają, bo leżą poza programem.
+
+## Instalacja z kodu źródłowego
 
 Pobierz projekt: zielony przycisk **Code → Download ZIP** i rozpakuj. Możesz też sklonować:
 
@@ -141,6 +167,21 @@ program może wymagać aktualizacji.
 | „proxy odrzuciło login lub hasło (407)” | Sprawdź login i hasło. Niektóre proxy zamiast hasła wymagają dodania Twojego IP do białej listy. |
 | Coś innego | Zakładka **Log** pokazuje szczegóły. *Narzędzia → Zrzut ekranu przeglądarki* pokazuje, co widzi przeglądarka. |
 
+## Budowanie .exe i .deb (dla autora)
+
+Najpierw podnieś numer wersji w `config.py` (`APP_VERSION`), potem:
+
+```bash
+# Windows → dist/TelegramAutoMessage-<wersja>-windows.exe
+python packaging/build_exe.py
+
+# Debian / Ubuntu / WSL → dist/telegram-automessage_<wersja>_all.deb
+bash packaging/build_deb.sh
+```
+
+Gotowe pliki z `dist/` wrzuć do nowego wydania na GitHubie: **Releases → Draft a new release**.
+Folder `dist/` nie trafia do repozytorium.
+
 ## Pliki projektu
 
 | Plik | Do czego służy |
@@ -156,3 +197,6 @@ program może wymagać aktualizacji.
 | `config.py` | ścieżki i ustawienia domyślne |
 | `install.sh`, `run.sh` | instalacja i start na Linuxie |
 | `install.bat`, `run.bat` | instalacja i start na Windows |
+| `packaging/build_exe.py` | budowanie `.exe` (PyInstaller) |
+| `packaging/build_deb.sh` | budowanie paczki `.deb` |
+| `assets/` | ikona programu |
