@@ -20,6 +20,8 @@ DEFAULT_SETTINGS = {
     "retry_after_error_min": 30,
     "headless": True,
     "theme": "tokyo-night-dark",
+    # type: http | https | socks5 | socks4. Login/password work for http/https only (Chrome limitation).
+    "proxy": {"enabled": False, "type": "http", "host": "", "port": "", "username": "", "password": ""},
     "mode": "text",     # "text" = own message, "forward" = forward a chosen message
     "forward": {},      # {from_peer_id, from_name, mid, preview, date, drop_author}
     "show_unavailable": False,

@@ -17,6 +17,7 @@ Działa na **Windows** i **Linux** (Debian, Ubuntu, Mint).
   - ✍ **własna treść**: dowolny tekst, emoji i wiele linii;
   - ↪ **przekazanie wiadomości** z czatu prywatnego albo z „Zapisanych wiadomości”, także ze zdjęciem czy filmem. Opcjonalnie bez nagłówka „Przekazano od”.
 - **Harmonogram**: każdy czat ma własny, losowy odstęp, np. co 70–164 min. Po błędzie program ponawia próbę później.
+- **Proxy**: HTTP, HTTPS, SOCKS5 i SOCKS4, także z loginem i hasłem. Ma przycisk do sprawdzenia, z jakim IP program jest widoczny w sieci.
 - **Skanowanie nie oznacza czatów jako przeczytanych**: program nie otwiera czatów, tylko czyta dane z Telegram Web.
 - **Motywy jasne i ciemne** w menu *Wygląd*.
 
@@ -76,8 +77,34 @@ Potrzebny jest Google Chrome albo Chromium. Sterownik przeglądarki Selenium pob
 4. **Sprawdź na jednym czacie**: kliknij czat na liście i użyj **„Wyślij test…”**.
 5. Kliknij **▶ Start wysyłania**. W tabeli widać odliczanie do kolejnej wysyłki i licznik wysłanych. **■ Stop** zatrzymuje wysyłanie.
 
-Menu **Narzędzia → Pokazuj okno przeglądarki** pokazuje przeglądarkę, co pomaga przy szukaniu problemów.
 Menu **Konto → Wyloguj** usuwa zapisaną sesję.
+
+## Proxy
+
+**Plik → Ustawienia…** (albo `Ctrl+,`) lub kliknięcie wskaźnika proxy w nagłówku okna.
+
+<img src="docs/screenshot-settings.png" alt="Ustawienia proxy" width="420">
+
+1. Włącz **„Łącz z Telegramem przez proxy”**.
+2. Wybierz typ (**HTTP**, **HTTPS**, **SOCKS5** albo **SOCKS4**) i wpisz adres oraz port.
+3. Jeśli proxy tego wymaga, wpisz login i hasło. Działa to dla HTTP, HTTPS i SOCKS5.
+4. Kliknij **„Sprawdź proxy”**. Program połączy się przez proxy i pokaże IP, z jakim jest widoczny w sieci.
+5. Kliknij **Zapisz**. Przeglądarka uruchomi się ponownie i cały ruch Telegrama pójdzie przez proxy.
+
+Gdy proxy jest włączone, w nagłówku widać 🛡 adres proxy i aktualne IP.
+**Narzędzia → Sprawdź IP przeglądarki** sprawdza je ponownie w każdej chwili.
+
+Chrome sam nie umie logować się do proxy w tle ani do SOCKS5 z hasłem. Dlatego przy proxy z loginem program
+uruchamia lokalny przekaźnik na `127.0.0.1`, który przekazuje ruch do Twojego proxy z danymi logowania.
+Program wyłącza też WebRTC poza proxy, żeby przeglądarka nie zdradziła prawdziwego IP.
+
+Uwaga: hasło do proxy jest zapisane w pliku ustawień na Twoim komputerze. Po zmianie IP Telegram może poprosić
+o ponowne zalogowanie.
+
+## Inne ustawienia
+
+W **Plik → Ustawienia…** możesz też włączyć **„Pokazuj okno przeglądarki”**. Przeglądarka będzie wtedy widoczna,
+co pomaga przy szukaniu problemów.
 
 ## Gdzie są dane
 
@@ -108,6 +135,8 @@ program może wymagać aktualizacji.
 | Na Linuxie `No module named tkinter` | `sudo apt install python3-tk` albo uruchom ponownie `install.sh`. |
 | Na Linuxie błąd sterownika Chromium | `sudo apt install chromium chromium-driver` (wersje muszą się zgadzać). |
 | Błąd wysyłki `SLOWMODE_WAIT` | Grupa ma tryb powolny. Ustaw dłuższy odstęp. |
+| „Telegram Web nie wczytał się przez proxy” | W *Ustawieniach* kliknij **Sprawdź proxy**. Komunikat powie, czy problem jest w adresie, porcie czy haśle. |
+| „proxy odrzuciło login lub hasło (407)” | Sprawdź login i hasło. Niektóre proxy zamiast hasła wymagają dodania Twojego IP do białej listy. |
 | Coś innego | Zakładka **Log** pokazuje szczegóły. *Narzędzia → Zrzut ekranu przeglądarki* pokazuje, co widzi przeglądarka. |
 
 ## Pliki projektu
@@ -117,7 +146,8 @@ program może wymagać aktualizacji.
 | `main.py` | punkt startowy |
 | `gui.py` | okno programu (ttkbootstrap) |
 | `worker.py` | wątek w tle, który obsługuje przeglądarkę |
-| `telegram_browser.py` | uruchamianie Chrome / Chromium w tle |
+| `telegram_browser.py` | uruchamianie Chrome / Chromium w tle, ustawienia proxy |
+| `proxy_relay.py` | lokalny przekaźnik proxy z logowaniem (HTTP / HTTPS / SOCKS5 / SOCKS4) |
 | `telegram_login.py` | logowanie numerem i kodem |
 | `telegram_api.py` | skanowanie, historia, wysyłanie i przekazywanie przez Telegram Web |
 | `telegram_scheduler.py` | harmonogram wysyłek |

@@ -7,10 +7,16 @@ import tkinter as tk
 from datetime import datetime
 from tkinter import filedialog
 
+import threading
+
 import ttkbootstrap as tb
 
-from config import app_data_dir, load_settings, save_settings
+from config import DEFAULT_SETTINGS, app_data_dir, load_settings, save_settings
+from proxy_relay import test_proxy
+from telegram_browser import proxy_url
 from worker import BrowserWorker
+
+PROXY_TYPES = [("HTTP", "http"), ("HTTPS", "https"), ("SOCKS5", "socks5"), ("SOCKS4", "socks4")]
 
 BOX_ON, BOX_OFF, BOX_PART, BOX_NONE = "\u2611", "\u2610", "\u25a3", "\u2012"
 ICONS = {"channel": "\U0001F4E2", "group": "\U0001F465", "forum": "\U0001F4AC", "topic": "#"}
@@ -111,6 +117,8 @@ class App:
         menubar = tk.Menu(self.root)
 
         m_file = tk.Menu(menubar, tearoff=False)
+        m_file.add_command(label="Ustawienia (proxy, przeglądarka)...", command=self.open_settings,
+                           accelerator="Ctrl+,")
         m_file.add_command(label="Zapisz ustawienia", command=self.save, accelerator="Ctrl+S")
         m_file.add_command(label="Otwórz folder danych", command=self.open_data_dir)
         m_file.add_separator()
@@ -125,10 +133,8 @@ class App:
         m_tools = tk.Menu(menubar, tearoff=False)
         m_tools.add_command(label="Skanuj czaty", command=self.scan)
         m_tools.add_separator()
+        m_tools.add_command(label="Sprawdź IP przeglądarki", command=self.check_ip)
         m_tools.add_command(label="Zrzut ekranu przeglądarki...", command=self.screenshot)
-        self.show_browser = tk.BooleanVar(value=not self.settings.get("headless", True))
-        m_tools.add_checkbutton(label="Pokazuj okno przeglądarki (diagnostyka)", variable=self.show_browser,
-                                command=self.toggle_browser)
         menubar.add_cascade(label="Narzędzia", menu=m_tools)
 
         m_view = tk.Menu(menubar, tearoff=False)
@@ -143,6 +149,7 @@ class App:
 
         self.root.config(menu=menubar)
         self.root.bind_all("<Control-s>", lambda e: self.save())
+        self.root.bind_all("<Control-comma>", lambda e: self.open_settings())
 
     def _build_header(self):
         head = tb.Frame(self.root, padding=(20, 16, 20, 8))
@@ -160,7 +167,11 @@ class App:
         self.status_pill = tb.Label(right, textvariable=self.status_var, bootstyle="@info",
                                     padding=(12, 4), font=("TkDefaultFont", 10, "bold"))
         self.status_pill.pack(anchor="e")
-        self.progress = tb.Progressbar(right, mode="indeterminate", length=180, bootstyle="striped info")
+        self.proxy_var = tk.StringVar()
+        self.proxy_label = tb.Label(right, textvariable=self.proxy_var, bootstyle="info", cursor="hand2")
+        self.proxy_label.bind("<Button-1>", lambda e: self.open_settings())
+        self._update_proxy_label()
+        self.progress =tb.Progressbar(right, mode="indeterminate", length=180, bootstyle="striped info")
         self.busy_var = tk.StringVar()
         self.busy_label = tb.Label(right, textvariable=self.busy_var, bootstyle="secondary")
 
@@ -757,12 +768,154 @@ class App:
         if path:
             self.worker.send("screenshot", path)
 
-    def toggle_browser(self):
-        self.settings["headless"] = not self.show_browser.get()
-        save_settings(self.settings)
-        if self.ask("Przeglądarka", "Uruchomić przeglądarkę ponownie, aby zastosować zmianę?"):
-            self.worker.send("stop_sending")
-            self.worker.send("start")
+    # ---------------------------------------------------------------- settings dialog
+    def _update_proxy_label(self, ip=None):
+        url = proxy_url(self.settings.get("proxy"))
+        if url:
+            host = url.split("://", 1)[1]
+            self.proxy_var.set(f"\U0001F6E1  Proxy {host}" + (f"  •  IP {ip}" if ip else ""))
+            self.proxy_label.pack(anchor="e", pady=(6, 0), after=self.status_pill)
+        else:
+            self.proxy_label.pack_forget()
+
+    def check_ip(self):
+        if self.logged_in or self.worker.driver:
+            self.notebook.select(2)
+            self.worker.send("check_ip")
+
+    def open_settings(self):
+        if getattr(self, "_settings_win", None) and self._settings_win.winfo_exists():
+            self._settings_win.lift()
+            return
+        proxy = {**DEFAULT_SETTINGS["proxy"], **(self.settings.get("proxy") or {})}
+        win = tb.Toplevel(title="Ustawienia")
+        self._settings_win = win
+        win.transient(self.root)
+        win.resizable(False, False)
+        body = tb.Frame(win, padding=20)
+        body.pack(fill="both", expand=True)
+
+        # --- proxy
+        pf = tb.Labelframe(body, text="  Proxy  ", padding=16, bootstyle="primary")
+        pf.pack(fill="x")
+        v_on = tk.BooleanVar(value=bool(proxy.get("enabled")))
+        v_type = tk.StringVar(value=next((l for l, k in PROXY_TYPES if k == proxy.get("type")), "HTTP"))
+        v_host, v_port = tk.StringVar(value=proxy.get("host", "")), tk.StringVar(value=str(proxy.get("port", "")))
+        v_user, v_pass = tk.StringVar(value=proxy.get("username", "")), tk.StringVar(value=proxy.get("password", ""))
+        tb.Checkbutton(pf, text="Łącz z Telegramem przez proxy", variable=v_on, bootstyle="toggle").grid(
+            row=0, column=0, columnspan=4, sticky="w", pady=(0, 12))
+        tb.Label(pf, text="Typ").grid(row=1, column=0, sticky="w", pady=4)
+        tb.Combobox(pf, textvariable=v_type, values=[l for l, _ in PROXY_TYPES], state="readonly",
+                    width=10).grid(row=1, column=1, sticky="w", pady=4)
+        tb.Label(pf, text="Adres").grid(row=2, column=0, sticky="w", pady=4)
+        tb.Entry(pf, textvariable=v_host, width=30).grid(row=2, column=1, sticky="w", pady=4)
+        tb.Label(pf, text="Port").grid(row=2, column=2, sticky="e", padx=(12, 6))
+        tb.Entry(pf, textvariable=v_port, width=8).grid(row=2, column=3, sticky="w")
+        tb.Label(pf, text="Login").grid(row=3, column=0, sticky="w", pady=4)
+        tb.Entry(pf, textvariable=v_user, width=30).grid(row=3, column=1, sticky="w", pady=4)
+        tb.Label(pf, text="Hasło").grid(row=4, column=0, sticky="w", pady=4)
+        pass_entry = tb.Entry(pf, textvariable=v_pass, width=30, show="•")
+        pass_entry.grid(row=4, column=1, sticky="w", pady=4)
+        v_show = tk.BooleanVar(value=False)
+        tb.Checkbutton(pf, text="pokaż", variable=v_show, bootstyle="secondary",
+                       command=lambda: pass_entry.configure(show="" if v_show.get() else "•")).grid(
+            row=4, column=2, columnspan=2, sticky="w", padx=(12, 0))
+        tb.Label(pf, bootstyle="secondary", wraplength=440, justify="left",
+                 text="Login i hasło są opcjonalne (działają dla HTTP, HTTPS i SOCKS5). "
+                      "Hasło jest zapisywane w pliku ustawień na tym komputerze.").grid(
+            row=5, column=0, columnspan=4, sticky="w", pady=(8, 0))
+
+        test_row = tb.Frame(pf)
+        test_row.grid(row=6, column=0, columnspan=4, sticky="w", pady=(12, 0))
+        result = tk.StringVar()
+        result_lbl = tb.Label(test_row, textvariable=result, wraplength=320)
+
+        def collect():
+            return {"enabled": v_on.get(), "type": dict(PROXY_TYPES).get(v_type.get(), "http"),
+                    "host": v_host.get().strip(), "port": v_port.get().strip(),
+                    "username": v_user.get().strip(), "password": v_pass.get()}
+
+        def validate(p):
+            if not p["enabled"]:
+                return None
+            if not p["host"]:
+                return "Podaj adres proxy."
+            if not p["port"].isdigit() or not 0 < int(p["port"]) < 65536:
+                return "Port musi być liczbą od 1 do 65535."
+            if p["type"] == "socks4" and p["password"]:
+                return "SOCKS4 nie obsługuje hasła. Wybierz SOCKS5 albo HTTP."
+            return None
+
+        def run_test():
+            p = {**collect(), "enabled": True}
+            problem = validate(p)
+            if problem:
+                result.set("✖ " + problem)
+                result_lbl.configure(bootstyle="danger")
+                return
+            result.set("Sprawdzam...")
+            result_lbl.configure(bootstyle="secondary")
+            btn_test.state(["disabled"])
+
+            def work():
+                try:
+                    ip = test_proxy(p)
+                    msg, style = f"✔ Działa. IP widoczne w sieci: {ip}", "success"
+                except Exception as err:
+                    msg, style = f"✖ Nie działa: {err}", "danger"
+
+                def show():
+                    if win.winfo_exists():
+                        result.set(msg)
+                        result_lbl.configure(bootstyle=style)
+                        btn_test.state(["!disabled"])
+                self.root.after(0, show)
+            threading.Thread(target=work, daemon=True).start()
+
+        btn_test = tb.Button(test_row, text="Sprawdź proxy", bootstyle="info outline", command=run_test)
+        btn_test.pack(side="left")
+        result_lbl.pack(side="left", padx=12)
+
+        # --- browser
+        bf = tb.Labelframe(body, text="  Przeglądarka  ", padding=16, bootstyle="info")
+        bf.pack(fill="x", pady=(14, 0))
+        v_show_browser = tk.BooleanVar(value=not self.settings.get("headless", True))
+        tb.Checkbutton(bf, text="Pokazuj okno przeglądarki (do diagnostyki)", variable=v_show_browser,
+                       bootstyle="toggle").pack(anchor="w")
+
+        # --- buttons
+        btns = tb.Frame(body)
+        btns.pack(fill="x", pady=(16, 0))
+
+        def save_and_close():
+            p = collect()
+            problem = validate(p)
+            if problem:
+                result.set("✖ " + problem)
+                result_lbl.configure(bootstyle="danger")
+                return
+            old = (self.settings.get("proxy"), self.settings.get("headless"))
+            self.settings["proxy"] = p
+            self.settings["headless"] = not v_show_browser.get()
+            save_settings(self.settings)
+            self._update_proxy_label()
+            win.destroy()
+            if old != (self.settings["proxy"], self.settings["headless"]):
+                note = "\n\nTrwające wysyłanie zostanie zatrzymane." if self.sending else ""
+                if self.ask("Ustawienia", "Uruchomić przeglądarkę ponownie, aby zastosować zmiany?" + note):
+                    self.logged_in = False
+                    self.worker.send("stop_sending")
+                    self.worker.send("start")
+
+        tb.Button(btns, text="Zapisz", bootstyle="primary", command=save_and_close, width=12).pack(side="right")
+        tb.Button(btns, text="Anuluj", bootstyle="secondary outline", command=win.destroy,
+                  width=10).pack(side="right", padx=8)
+        win.bind("<Escape>", lambda e: win.destroy())
+        win.update_idletasks()
+        x = self.root.winfo_rootx() + (self.root.winfo_width() - win.winfo_width()) // 2
+        y = self.root.winfo_rooty() + 60
+        win.geometry(f"+{x}+{y}")
+        win.grab_set()
 
     def logout(self):
         if self.ask(
@@ -883,6 +1036,10 @@ class App:
                     self.toast("Skanowanie zakończone", f"{len(self._targets)} miejsc do pisania.", "info")
                 elif kind == "history":
                     self._show_history(payload)
+                elif kind == "ip":
+                    self._update_proxy_label(payload)
+                    if payload is None and proxy_url(self.settings.get("proxy")):
+                        self.toast("Proxy", "Nie udało się połączyć przez proxy. Sprawdź ustawienia.", "danger")
                 elif kind == "sending":
                     self.sending = payload
                     self._idle_status()

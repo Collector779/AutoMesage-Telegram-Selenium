@@ -8,7 +8,8 @@ import traceback
 import telegram_api
 import telegram_login as login
 from config import profile_dir
-from telegram_browser import start_browser
+from proxy_relay import ProxyRelay
+from telegram_browser import check_public_ip, proxy_needs_auth, proxy_url, start_browser
 from telegram_scheduler import Scheduler
 
 
@@ -19,6 +20,7 @@ class BrowserWorker(threading.Thread):
         self.commands = queue.Queue()  # GUI -> worker: (name, args)
         self.settings = settings
         self.driver = None
+        self.relay = None
         self.scheduler = None
         self.stop_scan = threading.Event()
         self._last_snapshot = 0.0
@@ -80,22 +82,69 @@ class BrowserWorker(threading.Thread):
             except Exception:
                 pass
             self.driver = None
+        self._stop_relay()
+
+    def _stop_relay(self):
+        if self.relay is not None:
+            self.relay.stop()
+            self.relay = None
 
     # ---- commands -------------------------------------------------------------------
     def cmd_start(self):
         self._quit_driver()
         headless = bool(self.settings.get("headless", True))
-        self._set_busy(True, "Uruchamianie przegladarki...")
-        self.log("Uruchamianie przegladarki" + (" w tle..." if headless else " (widoczne okno)..."))
-        self.driver = start_browser(headless=headless)
-        self.log("Laczenie z Telegram Web...")
+        proxy = self.settings.get("proxy") or {}
+        purl = proxy_url(proxy)
+        self._set_busy(True, "Uruchamianie przeglądarki...")
+        self.log("Uruchamianie przeglądarki" + (" w tle" if headless else " (widoczne okno)")
+                 + (f" przez proxy {purl}" + (" z logowaniem" if proxy.get("username") else "") if purl else "")
+                 + "...")
+        try:
+            server = purl
+            if purl and proxy_needs_auth(proxy):
+                self.relay = ProxyRelay(proxy).start()  # Chrome can't log in to proxies itself
+                server = self.relay.url
+            self.driver = start_browser(headless=headless, proxy_server=server)
+        except Exception as err:
+            self._stop_relay()
+            self._set_busy(False)
+            self.log(f"Nie udało się uruchomić przeglądarki: {err}")
+            self._report_state("error", str(err))
+            return
+        if purl:
+            self._log_ip()
+        self.log("Łączenie z Telegram Web...")
         state, error = login.wait_for_state(self.driver, None, timeout=45)
         if state == "qr":
             state, error = login.open_phone_form(self.driver)
         self._set_busy(False)
+        if state == "loading" and purl:
+            detail = f" ({self.relay.last_error})" if self.relay and self.relay.last_error else ""
+            error = ("Telegram Web nie wczytał się przez proxy. Sprawdź adres, port i dane logowania proxy."
+                     + detail)
+            self.log(error)
         self._report_state(state, error)
         if state == "logged_in":
             self.log("Zalogowano (zapisana sesja).")
+
+    def _log_ip(self):
+        try:
+            ip = check_public_ip(self.driver)
+            self.log(f"Publiczne IP przeglądarki: {ip}")
+            self.emit("ip", ip)
+        except Exception as err:
+            msg = str(err).splitlines()[0] if str(err) else type(err).__name__
+            self.log(f"Nie udało się sprawdzić IP (proxy nie działa?): {msg}")
+            self.emit("ip", None)
+
+    def cmd_check_ip(self):
+        if not self.driver:
+            return
+        self._set_busy(True, "Sprawdzanie IP...")
+        try:
+            self._log_ip()
+        finally:
+            self._set_busy(False)
 
     def cmd_phone(self, phone):
         self._set_busy(True, "Wysylanie numeru...")
