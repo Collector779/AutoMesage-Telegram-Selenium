@@ -256,9 +256,9 @@ class App:
                                 selectmode="none", bootstyle="primary")
         self.tree.heading("#0", text="  Grupa / kanał / temat", anchor="w")
         self.tree.column("#0", width=380, minwidth=220, stretch=True)
-        for col, text, width, anchor in [("type", "Typ / status", 210, "w"),
+        for col, text, width, anchor in [("type", "Typ / status", 200, "w"),
                                           ("next", "Następna", 120, "center"),
-                                          ("sent", "Wysłano", 75, "center")]:
+                                          ("sent", "Wysłano", 90, "center")]:
             self.tree.heading(col, text=text, anchor=anchor)
             self.tree.column(col, width=width, anchor=anchor, stretch=False)
         self.tree.tag_configure("off", foreground="#7f849c")

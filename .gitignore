@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+
+# Editors / OS
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Local data (the app keeps its session and settings in the user's AppData / ~/.local/share,
+# these are just in case someone points it at the project folder)
+settings.json
+chrome-profile/
+*.log

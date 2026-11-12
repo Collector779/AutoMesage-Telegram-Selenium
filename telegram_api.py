@@ -47,7 +47,7 @@ _SCAN_JS = _PRELUDE + r"""
       const kind = c.pFlags?.broadcast ? 'channel' : (c.pFlags?.forum ? 'forum' : 'group');
       let canSend = false, reason = '';
       try { canSend = !!(await m.appChatsManager.hasRights(chatId, 'send_plain')); } catch (e) { reason = 'blad sprawdzania praw'; }
-      if (!canSend && !reason) reason = kind === 'channel' ? 'kanał – piszą tylko admini' : 'pisanie wyłączone przez adminów';
+      if (!canSend && !reason) reason = kind === 'channel' ? 'piszą tylko admini' : 'pisanie wyłączone przez adminów';
       const g = {peer_id: String(peerId), name: c.title || String(peerId), kind, archived,
                  can_send: canSend, reason, slowmode: c.slowmode_seconds || 0, topics: []};
       if (kind === 'forum') {
