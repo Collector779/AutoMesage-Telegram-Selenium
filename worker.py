@@ -219,6 +219,14 @@ class BrowserWorker(threading.Thread):
         try:
             send_to_target(self.driver, target, self.settings)
             self.log(f"Wyslano do: {target['name']} (test)")
+        except telegram_api.TelegramApiError as err:
+            if err.is_slowmode or err.is_flood:
+                from telegram_scheduler import fmt_wait
+                what = "Tryb powolny" if err.is_slowmode else "Limit Telegrama"
+                wait = f" Można wysłać za {fmt_wait(err.wait_seconds)}." if err.wait_seconds else ""
+                self.log(f"{what} w '{target['name']}' – test nie został wysłany.{wait}")
+            else:
+                self.log(f"Blad wysylki do '{target['name']}': {err}")
         except Exception as err:
             self.log(f"Blad wysylki do '{target['name']}': {err}")
         finally:

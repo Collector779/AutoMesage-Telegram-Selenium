@@ -418,10 +418,11 @@ class App:
                     if t["can_send"]:
                         key = topic_key(g["peer_id"], t["thread_id"])
                         self._targets[key] = {"key": key, "peer_id": g["peer_id"], "thread_id": t["thread_id"],
-                                              "name": f"{g['name']} / {t['name']}"}
+                                              "name": f"{g['name']} / {t['name']}",
+                                              "slowmode": g.get("slowmode", 0)}
             elif g["can_send"]:
                 self._targets[g["peer_id"]] = {"key": g["peer_id"], "peer_id": g["peer_id"], "thread_id": None,
-                                               "name": g["name"]}
+                                               "name": g["name"], "slowmode": g.get("slowmode", 0)}
         self.selected &= set(self._targets)
 
     def _group_children_keys(self, g):
@@ -433,7 +434,8 @@ class App:
             return "–", ""
         left = max(0, int(sched["next"] - time.time()))
         nxt = f"za {left // 3600}h {left % 3600 // 60:02d}m {left % 60:02d}s" if left else "teraz"
-        return nxt, sched["sent"]
+        icon = {"slowmode": "  ⏳", "flood": "  ⏸", "error": "  ⚠"}.get(sched.get("note"), "")
+        return nxt + icon, sched["sent"]
 
     def _refresh_tree(self):
         open_items = {iid for iid in self.tree.get_children() if self.tree.item(iid, "open")}
@@ -461,7 +463,10 @@ class App:
                 kids = self._group_children_keys(g)
                 chosen = sum(k in self.selected for k in kids)
                 box = BOX_NONE if not kids else BOX_ON if chosen == len(kids) else BOX_PART if chosen else BOX_OFF
-                status = (f"Forum \u2022 {len(open_topics)}/{len(topics)} tematów" if usable
+                sm = int(g.get("slowmode") or 0)
+                slow = ("" if not sm else "  • ⏳" +
+                        (f" {sm // 60} min" if sm >= 60 else f" {sm} s" if sm > 1 else ""))
+                status = (f"Forum \u2022 {len(open_topics)}/{len(topics)} tematów{slow}" if usable
                           else f"Forum \u2022 {g['reason'] or 'wszystkie tematy zamknięte'}")
                 iid = f"g:{g['peer_id']}"
                 self.tree.insert("", "end", iid=iid, text=f" {box}  {ICONS['forum']}  {g['name']}",
@@ -481,7 +486,9 @@ class App:
                 if g["can_send"]:
                     key = g["peer_id"]
                     box = BOX_ON if key in self.selected else BOX_OFF
-                    slow = f"  \u2022 tryb powolny {g['slowmode']}s" if g.get("slowmode") else ""
+                    sm = int(g.get("slowmode") or 0)
+                    slow = ("" if not sm else "  \u2022 \u23f3 tryb powolny" +
+                            (f" {sm // 60} min" if sm >= 60 else f" {sm} s" if sm > 1 else ""))
                     self.tree.insert("", "end", iid=key, text=f" {box}  {ICONS.get(g['kind'], '')}  {g['name']}",
                                      values=(kind + slow + arch, *self._schedule_cells(key)))
                 else:

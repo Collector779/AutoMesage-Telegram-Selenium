@@ -3,6 +3,7 @@
 Everything runs inside the logged-in page, so nothing is clicked, no chat is opened
 and nothing gets marked as read. Each helper is an async JS snippet run via Selenium.
 """
+import re
 
 _PRELUDE = r"""
 const done = arguments[arguments.length - 1];
@@ -48,8 +49,14 @@ _SCAN_JS = _PRELUDE + r"""
       let canSend = false, reason = '';
       try { canSend = !!(await m.appChatsManager.hasRights(chatId, 'send_plain')); } catch (e) { reason = 'blad sprawdzania praw'; }
       if (!canSend && !reason) reason = kind === 'channel' ? 'piszą tylko admini' : 'pisanie wyłączone przez adminów';
+      let slowmode = 0;
+      const isAdmin = !!(c.admin_rights || c.pFlags?.creator);
+      if (canSend && !isAdmin && c.pFlags?.slowmode_enabled) {
+        try { slowmode = (await m.appProfileManager.getChatFull(chatId))?.slowmode_seconds || 0; } catch (e) {}
+        if (!slowmode) slowmode = 1;  // enabled but length unknown; learned on first send
+      }
       const g = {peer_id: String(peerId), name: c.title || String(peerId), kind, archived,
-                 can_send: canSend, reason, slowmode: c.slowmode_seconds || 0, topics: []};
+                 can_send: canSend, reason, slowmode, topics: []};
       if (kind === 'forum') {
         let topics = [];
         try { topics = await allDialogs(peerId); } catch (e) { g.reason = 'nie udało się pobrać tematów'; }
@@ -95,6 +102,25 @@ _HISTORY_JS = _PRELUDE + r"""
 })().catch(fail);
 """
 
+# Slow mode of a group: how long the limit is and how many seconds are left until we may post.
+_SLOWMODE_JS = _PRELUDE + r"""
+(async () => {
+  const peerId = +args[0];
+  if (peerId >= 0) { done({seconds: 0, wait: 0}); return; }
+  const chatId = -peerId;
+  const chat = await m.appChatsManager.getChat(chatId);
+  if (!chat || chat.admin_rights || chat.pFlags?.creator || !chat.pFlags?.slowmode_enabled) {
+    done({seconds: 0, wait: 0}); return;  // no slow mode, or admin (admins are exempt)
+  }
+  let full = null;
+  try { full = await m.appProfileManager.getChatFull(chatId); } catch (e) {}
+  const seconds = (full && full.slowmode_seconds) || chat.slowmode_seconds || 0;
+  const next = (full && full.slowmode_next_send_date) || 0;
+  const wait = next ? Math.max(0, Math.ceil(next - Date.now() / 1000)) : 0;
+  done({seconds, wait: Math.min(wait, seconds || wait)});
+})().catch(fail);
+"""
+
 # Send / forward. Rejections and `message_error` events both count as failures.
 _SEND_JS = _PRELUDE + r"""
 (async () => {
@@ -127,7 +153,19 @@ _SEND_JS = _PRELUDE + r"""
 
 
 class TelegramApiError(RuntimeError):
-    pass
+    @property
+    def wait_seconds(self):
+        """Seconds Telegram told us to wait (SLOWMODE_WAIT_X / FLOOD_WAIT_X), else None."""
+        m = re.search(r"(?:SLOWMODE|FLOOD|FLOOD_PREMIUM)_WAIT_(\d+)", str(self))
+        return int(m.group(1)) if m else None
+
+    @property
+    def is_slowmode(self):
+        return "SLOWMODE_WAIT" in str(self)
+
+    @property
+    def is_flood(self):
+        return "FLOOD" in str(self) and "_WAIT" in str(self)
 
 
 def _run(driver, js, *args, timeout=180):
@@ -145,6 +183,12 @@ def scan(driver):
 
 def history(driver, peer_id, limit=30):
     return _run(driver, _HISTORY_JS, str(peer_id), int(limit))["messages"]
+
+
+def slowmode(driver, peer_id):
+    """Return (slowmode_seconds, seconds_left_until_we_may_post) for a group; (0, 0) if none."""
+    res = _run(driver, _SLOWMODE_JS, str(peer_id), timeout=30)
+    return int(res.get("seconds") or 0), int(res.get("wait") or 0)
 
 
 def send_text(driver, peer_id, thread_id, text):

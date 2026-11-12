@@ -17,6 +17,7 @@ Działa na **Windows** i **Linux** (Debian, Ubuntu, Mint).
   - ✍ **własna treść**: dowolny tekst, emoji i wiele linii;
   - ↪ **przekazanie wiadomości** z czatu prywatnego albo z „Zapisanych wiadomości”, także ze zdjęciem czy filmem. Opcjonalnie bez nagłówka „Przekazano od”.
 - **Harmonogram**: każdy czat ma własny, losowy odstęp, np. co 70–164 min. Po błędzie program ponawia próbę później.
+- **Tryb powolny (slow mode)**: program odczytuje limit grupy i wysyła zaraz po jego końcu. Nie traci 30 minut na ponowienie i nigdy nie wysyła częściej, niż grupa pozwala. Przy limicie konta (`FLOOD_WAIT`) wstrzymuje wysyłanie na czas podany przez Telegram.
 - **Proxy**: HTTP, HTTPS, SOCKS5 i SOCKS4, także z loginem i hasłem. Ma przycisk do sprawdzenia, z jakim IP program jest widoczny w sieci.
 - **Skanowanie nie oznacza czatów jako przeczytanych**: program nie otwiera czatów, tylko czyta dane z Telegram Web.
 - **Motywy jasne i ciemne** w menu *Wygląd*.
@@ -134,7 +135,8 @@ program może wymagać aktualizacji.
 | „Telegram Web nie odpowiada” | *Konto → Połącz ponownie*. Sprawdź internet. |
 | Na Linuxie `No module named tkinter` | `sudo apt install python3-tk` albo uruchom ponownie `install.sh`. |
 | Na Linuxie błąd sterownika Chromium | `sudo apt install chromium chromium-driver` (wersje muszą się zgadzać). |
-| Błąd wysyłki `SLOWMODE_WAIT` | Grupa ma tryb powolny. Ustaw dłuższy odstęp. |
+| ⏳ przy czacie, w logu „Tryb powolny” | To nie błąd. Grupa ma tryb powolny, a program sam czeka do jego końca i wtedy wysyła. |
+| ⏸ przy czatach, w logu „FLOOD_WAIT” | Telegram chwilowo ograniczył konto. Program wstrzymuje wszystkie wysyłki na podany czas. Rozważ dłuższe odstępy. |
 | „Telegram Web nie wczytał się przez proxy” | W *Ustawieniach* kliknij **Sprawdź proxy**. Komunikat powie, czy problem jest w adresie, porcie czy haśle. |
 | „proxy odrzuciło login lub hasło (407)” | Sprawdź login i hasło. Niektóre proxy zamiast hasła wymagają dodania Twojego IP do białej listy. |
 | Coś innego | Zakładka **Log** pokazuje szczegóły. *Narzędzia → Zrzut ekranu przeglądarki* pokazuje, co widzi przeglądarka. |
