@@ -928,11 +928,40 @@ class App:
         if self.ask(
             "Wyloguj",
             "Usunąć zapisaną sesję z tego komputera? Trzeba będzie zalogować się ponownie.\n\n"
+            "Wyczyszczony zostanie też log, treść wiadomości, wybrana wiadomość do przekazania "
+            "oraz lista czatów i zaznaczenia (proxy i ustawienia programu zostają).\n\n"
             "Aby całkiem zakończyć sesję, usuń też urządzenie w Telegramie:\n"
             "Ustawienia \u203a Urządzenia.",
         ):
             self.logged_in = False
+            self._clear_account_data()
             self.worker.send("logout")
+
+    def _clear_account_data(self):
+        """Forget everything tied to the previous account: log, message, forward pick, chats, selection.
+        App-wide settings (proxy, theme, intervals, browser mode) stay."""
+        self.log_text.configure(state="normal")
+        self.log_text.delete("1.0", "end")
+        self.log_text.configure(state="disabled")
+        self._replace_line = False
+        self.msg_text.delete("1.0", "end")
+        self._on_msg_modified()
+        self.mode_var.set("text")
+        self._show_mode()
+        self.settings["forward"] = {}
+        self.drop_author.set(False)
+        self.history = []
+        self.hist.delete(*self.hist.get_children())
+        self.source_var.set("")
+        self.scan_data = {}
+        self.selected = set()
+        self.schedule = {}
+        self._rebuild_targets()
+        self._refresh_tree()
+        self._refresh_sources()
+        self._update_fwd_label()
+        self._collect_settings()
+        save_settings(self.settings)
 
     def open_data_dir(self):
         path = str(app_data_dir())
@@ -1034,6 +1063,10 @@ class App:
                 elif kind == "login_state":
                     self._on_login_state(*payload)
                 elif kind == "scan":
+                    old_id = self.scan_data.get("my_id")
+                    if old_id and payload.get("my_id") and old_id != payload["my_id"]:
+                        self._clear_account_data()
+                        self._log("Wykryto inne konto – wyczyszczono dane poprzedniego konta.")
                     self.scan_data = payload
                     self._rebuild_targets()
                     self._collect_settings()

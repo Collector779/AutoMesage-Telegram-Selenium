@@ -6,7 +6,7 @@ import sys
 from pathlib import Path
 
 APP_NAME = "TelegramAutoMessage"
-APP_VERSION = "1.0.0"
+APP_VERSION = "1.0.1"
 # PyInstaller (.exe) unpacks bundled files to sys._MEIPASS; from source / .deb they sit next to this file
 ASSETS_DIR = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent)) / "assets"
 TELEGRAM_WEB_URL = "https://web.telegram.org/k/"

@@ -104,7 +104,7 @@ Potrzebny jest Google Chrome albo Chromium. Sterownik przeglądarki Selenium pob
 4. **Sprawdź na jednym czacie**: kliknij czat na liście i użyj **„Wyślij test…”**.
 5. Kliknij **▶ Start wysyłania**. W tabeli widać odliczanie do kolejnej wysyłki i licznik wysłanych. **■ Stop** zatrzymuje wysyłanie.
 
-Menu **Konto → Wyloguj** usuwa zapisaną sesję.
+Menu **Konto → Wyloguj** usuwa zapisaną sesję i wszystko, co dotyczyło tego konta: log, treść wiadomości, wybraną wiadomość do przekazania, listę czatów i zaznaczenia. Proxy, motyw i harmonogram zostają. To samo dzieje się automatycznie, gdy po skanowaniu okaże się, że zalogowane jest inne konto niż poprzednio.
 
 ## Proxy
 
